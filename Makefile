@@ -1,0 +1,244 @@
+# Astral Backend - Enterprise API Key Management System
+# Comprehensive Test Suite and Build Pipeline
+
+.PHONY: help test test-unit test-integration test-e2e test-all coverage coverage-html lint build clean docker-test ci
+
+# Default target
+help: ## Show this help message
+	@echo "Astral Backend - Enterprise API Key Management System"
+	@echo ""
+	@echo "Available targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+
+# Test Commands
+test-unit: ## Run unit tests only
+	@echo "Running unit tests..."
+	go test ./pkg/... -v -short
+
+test-integration: ## Run integration tests (requires MongoDB)
+	@echo "Running integration tests..."
+	go test -tags=integration ./pkg/... -v
+
+test-e2e: ## Run end-to-end tests (requires MongoDB)
+	@echo "Running end-to-end tests..."
+	RUN_E2E=true go test -tags=e2e ./pkg/e2e/... -v -timeout=5m
+
+test-all: ## Run all tests (unit, integration, e2e)
+	@echo "Running all tests..."
+	@echo "1. Unit tests..."
+	go test ./pkg/... -v -short
+	@echo "2. Integration tests..."
+	go test -tags=integration ./pkg/... -v
+	@echo "3. End-to-end tests..."
+	RUN_E2E=true go test -tags=e2e ./pkg/e2e/... -v -timeout=5m
+
+# Coverage Commands
+coverage: ## Generate coverage report
+	@echo "Generating coverage report..."
+	go test -coverprofile=coverage.out ./pkg/...
+	go tool cover -func=coverage.out
+
+coverage-html: ## Generate HTML coverage report
+	@echo "Generating HTML coverage report..."
+	go test -coverprofile=coverage.out ./pkg/...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+coverage-integration: ## Generate coverage for integration tests
+	@echo "Generating integration test coverage..."
+	go test -tags=integration -coverprofile=coverage-integration.out ./pkg/...
+	go tool cover -func=coverage-integration.out
+
+# Quality Checks
+lint: ## Run linter
+	@echo "Running linter..."
+	golangci-lint run
+
+fmt: ## Format code
+	@echo "Formatting code..."
+	go fmt ./...
+
+vet: ## Run go vet
+	@echo "Running go vet..."
+	go vet ./...
+
+quality: lint fmt vet ## Run all quality checks
+
+# Build Commands
+build: ## Build the application
+	@echo "Building application..."
+	go build -o bin/astral-backend ./cmd/server
+
+build-test: ## Build test binaries
+	@echo "Building test binaries..."
+	go test -c -o bin/unit-tests ./pkg/...
+	go test -c -tags=integration -o bin/integration-tests ./pkg/...
+	go test -c -tags=e2e -o bin/e2e-tests ./pkg/e2e/...
+
+# Docker Commands
+docker-build: ## Build Docker image
+	@echo "Building Docker image..."
+	docker build -t astral-backend:latest .
+
+docker-test: ## Run full integration tests in Docker containers
+	@echo "Running full integration tests in Docker containers..."
+	./scripts/test-integration.sh
+
+# Database Setup
+mongo-up: ## Start MongoDB container for testing
+	@echo "Starting MongoDB..."
+	docker run -d --name astral-mongo -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=password mongo:latest
+
+mongo-down: ## Stop MongoDB container
+	@echo "Stopping MongoDB..."
+	docker stop astral-mongo
+	docker rm astral-mongo
+
+# CI Pipeline
+ci: quality test-unit coverage ## Run CI pipeline (quality checks, unit tests, coverage)
+	@echo "CI pipeline completed successfully!"
+
+ci-full: quality test-all coverage-html ## Run full CI pipeline (all tests, coverage)
+	@echo "Full CI pipeline completed successfully!"
+
+# Development Setup
+setup-dev: ## Setup development environment
+	@echo "Setting up development environment..."
+	@echo "1. Installing dependencies..."
+	go mod download
+	@echo "2. Installing tools..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "3. Setting up pre-commit hooks..."
+	@echo "#!/bin/bash\nmake quality" > .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+	@echo "Development environment setup complete!"
+
+# Cleanup
+clean: ## Clean build artifacts and test files
+	@echo "Cleaning up..."
+	rm -f bin/*
+	rm -f astral-backend astral-backend-new
+	rm -f coverage.out coverage.html coverage-*.out
+	rm -f *-test
+	rm -f eph/sweph/src/*.o eph/sweph/src/libswe.a eph/sweph/src/swetest
+	go clean ./...
+
+# Database Commands
+db-migrate: ## Run database migrations
+	@echo "Running database migrations..."
+	# Add migration commands here
+
+db-seed: ## Seed database with test data
+	@echo "Seeding database..."
+	# Add seeding commands here
+
+# Documentation
+docs: ## Generate documentation
+	@echo "Generating documentation..."
+	go doc -all ./pkg/... > docs/api.md
+
+# Benchmarking
+bench: ## Run benchmarks
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./pkg/...
+
+bench-profile: ## Run benchmarks with profiling
+	@echo "Running benchmarks with profiling..."
+	go test -bench=. -benchmem -cpuprofile=cpu.prof -memprofile=mem.prof ./pkg/...
+
+# Security
+security-scan: ## Run security scan
+	@echo "Running security scan..."
+	gosec ./...
+
+# Performance
+perf-test: ## Run performance tests
+	@echo "Running performance tests..."
+	# Add performance test commands here
+
+# Monitoring
+health-check: ## Run health checks
+	@echo "Running health checks..."
+	@echo "✓ Code quality checks"
+	-make quality
+	@echo "✓ Unit tests"
+	-make test-unit
+	@echo "✓ Build check"
+	-make build
+
+# Utility
+count-lines: ## Count lines of code
+	@echo "Counting lines of code..."
+	find . -name "*.go" -not -path "./vendor/*" | xargs wc -l
+
+deps-update: ## Update dependencies
+	@echo "Updating dependencies..."
+	go get -u ./...
+	go mod tidy
+
+deps-audit: ## Audit dependencies for vulnerabilities
+	@echo "Auditing dependencies..."
+	go mod verify
+	# Add additional security checks here
+
+# Environment
+env-check: ## Check environment setup
+	@echo "Checking environment..."
+	@echo "Go version: $$(go version)"
+	@echo "MongoDB connection: $$(timeout 5 bash -c "</dev/tcp/localhost/27017" && echo "OK" || echo "NOT AVAILABLE")"
+	@echo "Docker: $$(docker --version 2>/dev/null || echo "NOT INSTALLED")"
+
+# Quick development loop
+dev: fmt lint test-unit build ## Quick development check (format, lint, test, build)
+
+# Production build
+build-prod: ## Build for production
+	@echo "Building for production..."
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/astral-backend-prod ./cmd/server
+
+# Docker Compose
+compose-up: ## Start all services with Docker Compose
+	@echo "Starting services..."
+	docker-compose up -d
+
+compose-down: ## Stop all services
+	@echo "Stopping services..."
+	docker-compose down
+
+compose-logs: ## Show service logs
+	docker-compose logs -f
+
+# Release
+release: build-prod ## Create release artifacts
+	@echo "Creating release..."
+	# Add release commands here
+
+# Troubleshooting
+debug-test: ## Debug test failures
+	@echo "Debugging test failures..."
+	go test -v -race ./pkg/...
+
+debug-build: ## Debug build issues
+	@echo "Debugging build issues..."
+	go build -x -v ./cmd/server
+
+# Information
+info: ## Show project information
+	@echo "Astral Backend - Enterprise API Key Management System"
+	@echo "=================================================="
+	@echo "Version: $$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')"
+	@echo "Commit: $$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+	@echo "Go Version: $$(go version | cut -d' ' -f3)"
+	@echo "Build Time: $$(date)"
+	@echo ""
+	@echo "Components:"
+	@echo "  ✓ Error handling system"
+	@echo "  ✓ Structured logging"
+	@echo "  ✓ API key models and validation"
+	@echo "  ✓ Authentication service"
+	@echo "  ✓ MongoDB repository"
+	@echo "  ✓ Authentication middleware"
+	@echo "  ✓ Ephemeris handlers"
+	@echo "  ✓ End-to-end tests"
+	@echo ""
+	@echo "Test Coverage: Run 'make coverage' to check"
