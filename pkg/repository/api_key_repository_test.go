@@ -33,7 +33,6 @@ func TestAPIKeyModelValidation(t *testing.T) {
 		ID:          primitive.NewObjectID(),
 		KeyHash:     "test-hash",
 		Name:        "Test Key",
-		Description: "A test API key",
 		Scopes:      []string{"read:ephemeris", "admin"},
 		Permissions: []string{"calculate:planets", "manage:api_keys"},
 		IsActive:    true,

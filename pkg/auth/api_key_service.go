@@ -313,8 +313,8 @@ func (h *SecurePasswordHasher) Verify(password, hashedPassword string) (bool, er
 	// Extract parameters
 	var version int
 	var memory, iterations, parallelism uint32
-	fmt.Sscanf(parts[2], "v=%d", &version)
-	fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
+	_, _ = fmt.Sscanf(parts[2], "v=%d", &version)
+	_, _ = fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {

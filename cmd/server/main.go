@@ -50,7 +50,7 @@ func main() {
 	}
 
 	// Ping MongoDB
-	if err := mongoClient.Ping(ctx, nil); err != nil {
+	if err = mongoClient.Ping(ctx, nil); err != nil {
 		appLogger.Error("Failed to ping MongoDB", zap.Error(err))
 		log.Fatal("Failed to ping MongoDB:", err)
 	}
@@ -61,7 +61,7 @@ func main() {
 	apiKeyRepo := repository.NewAPIKeyRepository(mongoClient.Database("astral"), appLogger)
 
 	// Create indexes
-	if err := apiKeyRepo.CreateIndexes(ctx); err != nil {
+	if err = apiKeyRepo.CreateIndexes(ctx); err != nil {
 		appLogger.Error("Failed to create database indexes", zap.Error(err))
 		log.Fatal("Failed to create database indexes:", err)
 	}

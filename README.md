@@ -1,15 +1,19 @@
 # Astral Backend - Enterprise Astrological API Service
 
+[![CI/CD](https://github.com/username/astral-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/username/astral-backend/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://docker.com)
+
 A production-ready, high-performance REST API service for astrological calculations using the Swiss Ephemeris library. Built with Go, featuring Redis caching, request tracing, and Docker orchestration.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Go 1.21+
-- Docker & Docker Compose
-- MongoDB (for API keys)
-- Redis (for caching)
+-   Go 1.21+
+-   Docker & Docker Compose
+-   MongoDB (for API keys)
+-   Redis (for caching)
 
 ### Run the Full Stack
 
@@ -30,15 +34,34 @@ curl -H "Authorization: Bearer YOUR_API_KEY" \
   "http://localhost:8080/api/v1/planets?year=2024&month=1&day=15&ut=12.0"
 ```
 
+## 🛠️ Development Quick Start
+
+```bash
+# Setup development environment (includes Swiss Ephemeris build)
+make setup-dev
+
+# Run all tests
+make test-all
+
+# Build application
+make build
+
+# Test full Docker stack
+make docker-test
+
+# Clean build artifacts
+make clean
+```
+
 ## 📋 Table of Contents
 
-- [Architecture Overview](#architecture-overview)
-- [API Documentation](#api-documentation)
-- [Development Setup](#development-setup)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Monitoring & Observability](#monitoring--observability)
-- [Troubleshooting](#troubleshooting)
+-   [Architecture Overview](#architecture-overview)
+-   [API Documentation](#api-documentation)
+-   [Development Setup](#development-setup)
+-   [Testing](#testing)
+-   [Deployment](#deployment)
+-   [Monitoring & Observability](#monitoring--observability)
+-   [Troubleshooting](#troubleshooting)
 
 ## 🏗️ Architecture Overview
 
@@ -65,12 +88,12 @@ curl -H "Authorization: Bearer YOUR_API_KEY" \
 
 ### Key Features
 
-- **🔐 Authentication**: API key-based auth with scopes
-- **⚡ Performance**: Redis caching (20-40x speedup)
-- **🔄 Scalability**: Worker pool for concurrent calculations
-- **🛡️ Reliability**: Circuit breaker pattern
-- **📊 Observability**: Request tracing and structured logging
-- **🐳 Containerized**: Docker-based deployment
+-   **🔐 Authentication**: API key-based auth with scopes
+-   **⚡ Performance**: Redis caching (20-40x speedup)
+-   **🔄 Scalability**: Worker pool for concurrent calculations
+-   **🛡️ Reliability**: Circuit breaker pattern
+-   **📊 Observability**: Request tracing and structured logging
+-   **🐳 Containerized**: Docker-based deployment
 
 ### Data Flow
 
@@ -103,8 +126,8 @@ GET /health
 
 ```json
 {
-  "status": "healthy",
-  "service": "astral-backend"
+    "status": "healthy",
+    "service": "astral-backend"
 }
 ```
 
@@ -116,23 +139,23 @@ GET /api/v1/planets?year={year}&month={month}&day={day}&ut={ut}
 
 **Parameters:**
 
-- `year`: Integer (e.g., 2024)
-- `month`: Integer 1-12
-- `day`: Integer 1-31
-- `ut`: Float (Universal Time in decimal hours)
+-   `year`: Integer (e.g., 2024)
+-   `month`: Integer 1-12
+-   `day`: Integer 1-31
+-   `ut`: Float (Universal Time in decimal hours)
 
 **Response:**
 
 ```json
 {
-  "planets": [
-    {
-      "id": 0,
-      "name": "Sun",
-      "longitude": 294.81869079051665,
-      "retrograde": false
-    }
-  ]
+    "planets": [
+        {
+            "id": 0,
+            "name": "Sun",
+            "longitude": 294.81869079051665,
+            "retrograde": false
+        }
+    ]
 }
 ```
 
@@ -144,20 +167,20 @@ GET /api/v1/houses?year={year}&month={month}&day={day}&ut={ut}&lat={lat}&lng={ln
 
 **Additional Parameters:**
 
-- `lat`: Float (latitude in decimal degrees)
-- `lng`: Float (longitude in decimal degrees)
+-   `lat`: Float (latitude in decimal degrees)
+-   `lng`: Float (longitude in decimal degrees)
 
 **Response:**
 
 ```json
 {
-  "houses": [
-    {
-      "id": 1,
-      "longitude": 123.456,
-      "hsys": "P"
-    }
-  ]
+    "houses": [
+        {
+            "id": 1,
+            "longitude": 123.456,
+            "hsys": "P"
+        }
+    ]
 }
 ```
 
@@ -180,14 +203,14 @@ GET /api/v1/chart?year={year}&month={month}&day={day}&ut={ut}&lat={lat}&lng={lng
 
 ```json
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Request validation failed",
-    "details": {
-      "field": "year",
-      "reason": "must be a valid year"
+    "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Request validation failed",
+        "details": {
+            "field": "year",
+            "reason": "must be a valid year"
+        }
     }
-  }
 }
 ```
 
@@ -338,26 +361,26 @@ All logs include request IDs for correlation:
 
 ```json
 {
-  "level": "info",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "service": "astral-backend",
-  "request_id": "74dae0de1234567890abcdef12345678",
-  "message": "Planets calculated successfully",
-  "planet_count": 12
+    "level": "info",
+    "timestamp": "2024-01-15T10:30:00Z",
+    "service": "astral-backend",
+    "request_id": "74dae0de1234567890abcdef12345678",
+    "message": "Planets calculated successfully",
+    "planet_count": 12
 }
 ```
 
 ### Health Checks
 
-- **Application**: `GET /health`
-- **MongoDB**: Built-in Docker health checks
-- **Redis**: Built-in Docker health checks
+-   **Application**: `GET /health`
+-   **MongoDB**: Built-in Docker health checks
+-   **Redis**: Built-in Docker health checks
 
 ### Performance Metrics
 
-- Response times: ~50-200ms (cached), ~500-2000ms (uncached)
-- Cache hit rate: Monitor Redis INFO stats
-- Concurrent requests: Worker pool metrics in logs
+-   Response times: ~50-200ms (cached), ~500-2000ms (uncached)
+-   Cache hit rate: Monitor Redis INFO stats
+-   Concurrent requests: Worker pool metrics in logs
 
 ## 🔧 Troubleshooting
 
@@ -416,21 +439,21 @@ curl http://localhost:8080/debug/vars
 
 ### Caching Strategy
 
-- **TTL**: 24 hours for ephemeris data
-- **Key Format**: `eph:{type}:{hash}` (e.g., `eph:planets:a1b2c3d4...`)
-- **Invalidation**: Automatic expiration
+-   **TTL**: 24 hours for ephemeris data
+-   **Key Format**: `eph:{type}:{hash}` (e.g., `eph:planets:a1b2c3d4...`)
+-   **Invalidation**: Automatic expiration
 
 ### Worker Pool Configuration
 
-- **Workers**: 4 concurrent calculation threads
-- **Queue**: Unlimited buffered channel
-- **Timeout**: 30 seconds per calculation
+-   **Workers**: 4 concurrent calculation threads
+-   **Queue**: Unlimited buffered channel
+-   **Timeout**: 30 seconds per calculation
 
 ### Memory Management
 
-- **CGO**: Careful memory management for C library calls
-- **Connection Pooling**: MongoDB and Redis connection reuse
-- **Goroutine Limits**: Worker pool prevents resource exhaustion
+-   **CGO**: Careful memory management for C library calls
+-   **Connection Pooling**: MongoDB and Redis connection reuse
+-   **Goroutine Limits**: Worker pool prevents resource exhaustion
 
 ## 🤝 Contributing
 
@@ -449,10 +472,10 @@ golangci-lint run
 
 ### Testing Requirements
 
-- All new code must have unit tests
-- Integration tests for database operations
-- Maintain >60% test coverage
-- All tests must pass CI
+-   All new code must have unit tests
+-   Integration tests for database operations
+-   Maintain >60% test coverage
+-   All tests must pass CI
 
 ### Commit Standards
 
@@ -474,28 +497,28 @@ curl -X POST http://localhost:8080/api/v1/keys
 
 ### Key Format
 
-- **Length**: ~50 characters
-- **Format**: Base64-encoded secure random bytes
-- **Scopes**: `read:ephemeris` (current), extensible for future features
+-   **Length**: ~50 characters
+-   **Format**: Base64-encoded secure random bytes
+-   **Scopes**: `read:ephemeris` (current), extensible for future features
 
 ## 🔒 Security Considerations
 
-- API keys use Argon2 hashing for storage
-- Request validation prevents injection attacks
-- HTTPS recommended for production
-- Rate limiting implemented at API key level
-- Audit logging for security events
+-   API keys use Argon2 hashing for storage
+-   Request validation prevents injection attacks
+-   HTTPS recommended for production
+-   Rate limiting implemented at API key level
+-   Audit logging for security events
 
 ## 🚨 Production Checklist
 
-- [ ] Environment variables configured
-- [ ] HTTPS enabled
-- [ ] Database backups configured
-- [ ] Monitoring alerts set up
-- [ ] Log aggregation configured
-- [ ] Performance baselines established
-- [ ] Security scanning completed
-- [ ] Load testing completed
+-   [ ] Environment variables configured
+-   [ ] HTTPS enabled
+-   [ ] Database backups configured
+-   [ ] Monitoring alerts set up
+-   [ ] Log aggregation configured
+-   [ ] Performance baselines established
+-   [ ] Security scanning completed
+-   [ ] Load testing completed
 
 ---
 

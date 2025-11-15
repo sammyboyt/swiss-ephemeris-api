@@ -231,6 +231,6 @@ func TestRedisCache_Expiration(t *testing.T) {
 
 	// Should expire after TTL
 	time.Sleep(150 * time.Millisecond)
-	retrieved, found = cache.Get(context.Background(), key)
+	_, found = cache.Get(context.Background(), key)
 	assert.False(t, found)
 }

@@ -65,9 +65,9 @@ vet: ## Run go vet
 quality: lint fmt vet ## Run all quality checks
 
 # Build Commands
-build: ## Build the application
+build: ## Build the application to dist/
 	@echo "Building application..."
-	go build -o bin/astral-backend ./cmd/server
+	go build -o dist/bin/astral-backend ./cmd/server
 
 build-test: ## Build test binaries
 	@echo "Building test binaries..."
@@ -102,20 +102,28 @@ ci-full: quality test-all coverage-html ## Run full CI pipeline (all tests, cove
 	@echo "Full CI pipeline completed successfully!"
 
 # Development Setup
-setup-dev: ## Setup development environment
+setup-dev: ## Setup development environment with Swiss Ephemeris
 	@echo "Setting up development environment..."
 	@echo "1. Installing dependencies..."
 	go mod download
 	@echo "2. Installing tools..."
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@echo "3. Setting up pre-commit hooks..."
-	@echo "#!/bin/bash\nmake quality" > .git/hooks/pre-commit
+	@echo "3. Building Swiss Ephemeris library..."
+	./scripts/build-sweph.sh
+	@echo "4. Setting up pre-commit hooks..."
+	mkdir -p .git/hooks
+	@echo '#!/bin/bash\n\necho "🔍 Running pre-commit checks..."\n\n# Run quality checks\necho "  📏 Running quality checks..."\nif ! make quality > /dev/null 2>&1; then\n    echo "❌ Quality checks failed. Run '\''make quality'\'' to fix."\n    exit 1\nfi\n\n# Check for build artifacts\necho "  🧹 Checking for build artifacts..."\nif [ -f "astral-backend" ] || [ -f "bin/astral-backend" ] || [ -f "dist/bin/astral-backend" ] || [ -f "eph/sweph/src/libswe.a" ] || ls eph/sweph/src/*.o 1> /dev/null 2>&1; then\n    echo "❌ Build artifacts found! Run '\''make clean'\'' before committing."\n    exit 1\nfi\n\n# Run unit tests\necho "  🧪 Running unit tests..."\nif ! go test ./pkg/... -short > /dev/null 2>&1; then\n    echo "❌ Unit tests failed. Fix tests before committing."\n    exit 1\nfi\n\necho "✅ All pre-commit checks passed!"' > .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
 	@echo "Development environment setup complete!"
+
+build-sweph: ## Build Swiss Ephemeris library
+	@echo "Building Swiss Ephemeris library..."
+	./scripts/build-sweph.sh
 
 # Cleanup
 clean: ## Clean build artifacts and test files
 	@echo "Cleaning up..."
+	rm -rf dist/
 	rm -f bin/*
 	rm -f astral-backend astral-backend-new
 	rm -f coverage.out coverage.html coverage-*.out
@@ -192,9 +200,9 @@ env-check: ## Check environment setup
 dev: fmt lint test-unit build ## Quick development check (format, lint, test, build)
 
 # Production build
-build-prod: ## Build for production
+build-prod: ## Build for production to dist/
 	@echo "Building for production..."
-	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/astral-backend-prod ./cmd/server
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o dist/bin/astral-backend-prod ./cmd/server
 
 # Docker Compose
 compose-up: ## Start all services with Docker Compose

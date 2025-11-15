@@ -21,8 +21,8 @@ func TestCircuitBreaker_Failure(t *testing.T) {
 	cb := NewCircuitBreaker(2, time.Minute)
 
 	// RED: Should open after failure threshold
-	cb.Call(func() error { return errors.New("test error") })
-	cb.Call(func() error { return errors.New("test error") })
+	_ = cb.Call(func() error { return errors.New("test error") })
+	_ = cb.Call(func() error { return errors.New("test error") })
 
 	// Third call should be blocked
 	err := cb.Call(func() error { return nil })
@@ -35,8 +35,8 @@ func TestCircuitBreaker_Recovery(t *testing.T) {
 	cb := NewCircuitBreaker(2, 100*time.Millisecond)
 
 	// RED: Should transition to half-open after timeout
-	cb.Call(func() error { return errors.New("test error") })
-	cb.Call(func() error { return errors.New("test error") })
+	_ = cb.Call(func() error { return errors.New("test error") })
+	_ = cb.Call(func() error { return errors.New("test error") })
 
 	assert.Equal(t, StateOpen, cb.GetState())
 
@@ -59,8 +59,8 @@ func TestCircuitBreaker_HalfOpenFailure(t *testing.T) {
 	cb := NewCircuitBreaker(2, 100*time.Millisecond)
 
 	// Put circuit breaker in half-open state
-	cb.Call(func() error { return errors.New("test error") })
-	cb.Call(func() error { return errors.New("test error") })
+	_ = cb.Call(func() error { return errors.New("test error") })
+	_ = cb.Call(func() error { return errors.New("test error") })
 	time.Sleep(150 * time.Millisecond)
 
 	// First call in half-open should succeed
@@ -91,11 +91,11 @@ func TestCircuitBreaker_CustomThresholds(t *testing.T) {
 
 	// Should allow 4 failures before opening
 	for i := 0; i < 4; i++ {
-		cb.Call(func() error { return errors.New("test error") })
+		_ = cb.Call(func() error { return errors.New("test error") })
 		assert.Equal(t, StateClosed, cb.GetState())
 	}
 
 	// Fifth failure should open circuit
-	cb.Call(func() error { return errors.New("test error") })
+	_ = cb.Call(func() error { return errors.New("test error") })
 	assert.Equal(t, StateOpen, cb.GetState())
 }

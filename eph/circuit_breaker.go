@@ -2,7 +2,6 @@ package eph
 
 import (
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -26,8 +25,6 @@ type CircuitBreaker struct {
 	failureThreshold int
 	recoveryTimeout  time.Duration
 	successThreshold int
-
-	mu sync.RWMutex
 }
 
 // NewCircuitBreaker creates a new circuit breaker

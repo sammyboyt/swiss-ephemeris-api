@@ -444,7 +444,7 @@ func BenchmarkAPIKeyService_ValidateAPIKey(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		service.ValidateAPIKey(context.Background(), "test-key")
+		_, _ = service.ValidateAPIKey(context.Background(), "test-key")
 	}
 }
 
@@ -453,7 +453,7 @@ func BenchmarkSecurePasswordHasher_Hash(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		hasher.Hash("benchmark-password")
+		_, _ = hasher.Hash("benchmark-password")
 	}
 }
 

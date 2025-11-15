@@ -9,6 +9,9 @@ as-server
 astral-backend
 bin/
 
+# Distribution artifacts
+dist/
+
 # Test coverage
 *.log
 *.out

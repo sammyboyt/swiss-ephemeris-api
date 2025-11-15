@@ -557,8 +557,8 @@ type mockEphemerisService struct{}
 
 func (m *mockEphemerisService) GetPlanetsCached(ctx context.Context, yr, mon, day int, ut float64) ([]eph.Planet, error) {
 	return []eph.Planet{
-		{Name: "Sun", Longitude: 45.5, Retrograde: false, },
-		{Name: "Moon", Longitude: 120.3, Retrograde: false, },
+		{Name: "Sun", Longitude: 45.5, Retrograde: false},
+		{Name: "Moon", Longitude: 120.3, Retrograde: false},
 	}, nil
 }
 
@@ -566,9 +566,9 @@ func (m *mockEphemerisService) GetHousesCached(ctx context.Context, yr, mon, day
 	houses := make([]eph.House, 12)
 	for i := 0; i < 12; i++ {
 		houses[i] = eph.House{
-			ID:       i + 1,
+			ID:        i + 1,
 			Longitude: float64(i * 30),
-			Hsys:     "P",
+			Hsys:      "P",
 		}
 	}
 	return houses, nil

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"astral-backend/pkg/cache"
+
 	"go.uber.org/zap"
 )
 
@@ -35,7 +36,7 @@ func (s *CachedEphemerisService) GetPlanetsCached(ctx context.Context, yr, mon, 
 			return planets, nil
 		}
 		// Cache corruption - remove invalid entry
-		s.cache.Delete(ctx, cacheKey)
+		_ = s.cache.Delete(ctx, cacheKey)
 	}
 
 	// Cache miss - calculate
@@ -66,7 +67,7 @@ func (s *CachedEphemerisService) GetHousesCached(ctx context.Context, yr, mon, d
 			return houses, nil
 		}
 		// Cache corruption - remove invalid entry
-		s.cache.Delete(ctx, cacheKey)
+		_ = s.cache.Delete(ctx, cacheKey)
 	}
 
 	// Cache miss - calculate
@@ -98,7 +99,7 @@ func (s *CachedEphemerisService) GetChartCached(ctx context.Context, yr, mon, da
 			}
 		}
 		// Cache corruption - remove invalid entry
-		s.cache.Delete(ctx, cacheKey)
+		_ = s.cache.Delete(ctx, cacheKey)
 	}
 
 	// Cache miss - calculate

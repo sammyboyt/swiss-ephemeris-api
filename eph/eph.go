@@ -102,7 +102,7 @@ func GetPlanets(yr int, mon int, day int, ut float64) ([]Planet, error) {
 		C.swe_get_planet_name(C.int32(i), pName)
 
 		p.ID = i
-		p.Name = string(C.GoString(pName))
+		p.Name = C.GoString(pName)
 		p.Longitude = xx[i][0]
 		p.Retrograde = xx[i][3] < 0
 		planets = append(planets, p)
