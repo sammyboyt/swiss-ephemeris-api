@@ -263,3 +263,99 @@ info: ## Show project information
 	@echo "  ✓ End-to-end tests"
 	@echo ""
 	@echo "Test Coverage: Run 'make coverage' to check"
+
+# =============================================================================
+# Lambda Deployment Commands
+# =============================================================================
+
+LAMBDA_IMAGE_NAME ?= astral-backend
+LAMBDA_IMAGE_TAG ?= dev
+AWS_REGION ?= eu-west-2
+AWS_ACCOUNT_ID ?= $(shell aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+ECR_REPO_URL ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(LAMBDA_IMAGE_NAME)
+
+lambda-help: ## Show Lambda deployment help
+	@echo "Lambda Deployment Commands"
+	@echo "=========================="
+	@echo ""
+	@echo "Prerequisites:"
+	@echo "  1. AWS CLI configured with credentials"
+	@echo "  2. Docker running"
+	@echo "  3. Terraform installed (for infrastructure)"
+	@echo ""
+	@echo "Quick Start:"
+	@echo "  make lambda-build    - Build Lambda Docker image"
+	@echo "  make lambda-push     - Push to ECR (requires login)"
+	@echo "  make lambda-deploy   - Full deploy (build + push + terraform)"
+	@echo "  make lambda-test     - Test deployed endpoint"
+	@echo "  make lambda-destroy  - Destroy all AWS resources"
+	@echo ""
+	@echo "Current config:"
+	@echo "  Region: $(AWS_REGION)"
+	@echo "  Image:  $(LAMBDA_IMAGE_NAME):$(LAMBDA_IMAGE_TAG)"
+	@echo "  ECR:    $(ECR_REPO_URL)"
+
+lambda-build: ## Build Lambda Docker image with CGO support
+	@echo "Building Lambda Docker image..."
+	DOCKER_BUILDKIT=1 docker build \
+		-t $(LAMBDA_IMAGE_NAME):$(LAMBDA_IMAGE_TAG) \
+		--platform linux/amd64 \
+		.
+	@echo "✅ Built: $(LAMBDA_IMAGE_NAME):$(LAMBDA_IMAGE_TAG)"
+
+lambda-ecr-login: ## Login to Amazon ECR
+	@echo "Logging into ECR..."
+	aws ecr get-login-password --region $(AWS_REGION) | \
+		docker login --username AWS --password-stdin $(ECR_REPO_URL)
+
+lambda-tag: ## Tag image for ECR
+	docker tag $(LAMBDA_IMAGE_NAME):$(LAMBDA_IMAGE_TAG) $(ECR_REPO_URL):$(LAMBDA_IMAGE_TAG)
+
+lambda-push: lambda-tag ## Push image to ECR
+	@echo "Pushing to ECR: $(ECR_REPO_URL):$(LAMBDA_IMAGE_TAG)"
+	docker push $(ECR_REPO_URL):$(LAMBDA_IMAGE_TAG)
+	@echo "✅ Pushed successfully"
+
+lambda-test-local: ## Test Lambda locally with RIE
+	@echo "Starting Lambda Runtime Interface Emulator..."
+	@echo "Test with: curl -XPOST http://localhost:9000/2015-03-31/functions/function/invocations -d '{\"httpMethod\": \"GET\", \"path\": \"/health\"}'"
+	docker run -p 9000:8080 $(LAMBDA_IMAGE_NAME):$(LAMBDA_IMAGE_TAG)
+
+lambda-init: ## Initialize Terraform
+	cd terraform && terraform init
+
+lambda-plan: ## Run Terraform plan
+	cd terraform && terraform plan
+
+lambda-apply: ## Run Terraform apply
+	cd terraform && terraform apply
+
+lambda-destroy: ## Destroy Terraform infrastructure
+	cd terraform && terraform destroy
+
+lambda-deploy: lambda-build lambda-push lambda-apply ## Full deployment (build + push + terraform)
+	@echo "🚀 Deployment complete!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Get API endpoint: cd terraform && terraform output api_gateway_endpoint"
+	@echo "  2. Get API key: cd terraform && terraform output -raw api_key_value"
+	@echo "  3. Test: curl -H 'x-api-key: <key>' <endpoint>/health"
+
+lambda-test: ## Test deployed Lambda endpoint
+	@ENDPOINT=$$(cd terraform && terraform output -raw api_gateway_endpoint 2>/dev/null) || echo ""; \
+	KEY=$$(cd terraform && terraform output -raw api_key_value 2>/dev/null) || echo ""; \
+	if [ -n "$$ENDPOINT" ] && [ -n "$$KEY" ]; then \
+		echo "Testing endpoint: $$ENDPOINT/health"; \
+		curl -s -H "x-api-key: $$KEY" "$$ENDPOINT/health" | jq . || echo "Install jq for pretty output"; \
+	else \
+		echo "❌ Endpoint or API key not found. Run 'terraform apply' first."; \
+	fi
+
+lambda-outputs: ## Show Terraform outputs
+	@cd terraform && terraform output
+
+lambda-clean: ## Clean Lambda build artifacts
+	docker rmi $(LAMBDA_IMAGE_NAME):$(LAMBDA_IMAGE_TAG) 2>/dev/null || true
+	docker rmi $(ECR_REPO_URL):$(LAMBDA_IMAGE_TAG) 2>/dev/null || true
+	docker system prune -f
+	@echo "✅ Cleaned Docker images"

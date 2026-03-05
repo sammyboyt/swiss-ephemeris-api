@@ -7,8 +7,13 @@ package eph
 
 int init()
 {
-	// Set ephemeris path to /app where data files are located in containers
-	swe_set_ephe_path("/app/");
+	// Set ephemeris path to /var/task/ephemeris/ for Lambda execution environment
+	swe_set_ephe_path("/var/task/ephemeris/");
+
+	// Set temporary directory to /tmp for any Swiss Ephemeris temp files
+	// Lambda only allows writes to /tmp (512MB-10GB available)
+	swe_set_jpl_file("/tmp/");
+
 	return 0;
 }
 

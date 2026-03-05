@@ -55,3 +55,15 @@ docker/astral-backend/logs/
 
 # Node modules (if any frontend code added later)
 node_modules/
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+
+# Deployment artifacts
+*.zip
+tmp/
+*.bak

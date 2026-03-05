@@ -1,0 +1,20 @@
+# =============================================================================
+# Astral Backend - Terraform Variables
+# Copy this to terraform.tfvars and customize for your environment
+# =============================================================================
+
+# AWS Region
+aws_region = "eu-west-2"
+
+# Environment (dev, staging, prod)
+environment = "dev"
+
+# Lambda Configuration
+lambda_memory_size = 512
+lambda_timeout     = 15
+
+# API Gateway Usage Plan
+api_key_name           = "astral-dev-key"
+usage_plan_limit       = 1000    # Monthly requests
+usage_plan_rate_limit  = 10     # Requests per second
+usage_plan_burst_limit = 20     # Burst capacity
