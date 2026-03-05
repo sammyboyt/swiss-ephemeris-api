@@ -1,11 +1,13 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"astral-backend/eph"
 	"astral-backend/pkg/errors"
@@ -15,21 +17,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// EphemerisService defines the interface for ephemeris calculations
-type EphemerisService interface {
-	GetPlanetsCached(ctx context.Context, yr, mon, day int, ut float64) ([]eph.Planet, error)
-	GetHousesCached(ctx context.Context, yr, mon, day int, ut, lat, lng float64) ([]eph.House, error)
-	GetChartCached(ctx context.Context, yr, mon, day int, ut, lat, lng float64) ([]eph.Planet, []eph.House, error)
-}
+// Use the EphemerisService interface from the eph package
 
 // EphemerisHandler handles ephemeris-related HTTP requests
 type EphemerisHandler struct {
-	service EphemerisService
+	service eph.EphemerisService
 	logger  *logger.Logger
 }
 
 // NewEphemerisHandler creates a new ephemeris handler
-func NewEphemerisHandler(service EphemerisService, logger *logger.Logger) *EphemerisHandler {
+func NewEphemerisHandler(service eph.EphemerisService, logger *logger.Logger) *EphemerisHandler {
 	return &EphemerisHandler{
 		service: service,
 		logger:  logger,
@@ -51,15 +48,15 @@ type ChartRequest struct {
 	Lng float64 `json:"lng" validate:"required,min=-180,max=180"`
 }
 
-// PlanetResponse represents the response for planet data
-type PlanetResponse struct {
-	Planets []eph.Planet `json:"planets"`
+// CelestialBodyResponse represents the response for celestial body data
+type CelestialBodyResponse struct {
+	Bodies []eph.CelestialBody `json:"bodies"`
 }
 
 // ChartResponse represents the response for complete chart data
 type ChartResponse struct {
-	Planets []eph.Planet `json:"planets"`
-	Houses  []eph.House  `json:"houses"`
+	Bodies []eph.CelestialBody `json:"bodies"`
+	Houses []eph.House         `json:"houses"`
 }
 
 // GetPlanets handles requests for planetary positions
@@ -104,11 +101,11 @@ func (h *EphemerisHandler) GetPlanets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := PlanetResponse{Planets: planets}
+	response := CelestialBodyResponse{Bodies: planets}
 
-	h.logger.Info("Planets calculated successfully",
+	h.logger.Info("Bodies calculated successfully",
 		zap.String("request_id", requestID),
-		zap.Int("planet_count", len(planets)),
+		zap.Int("body_count", len(planets)),
 		zap.String("key_name", apiKey.Name),
 	)
 
@@ -215,13 +212,13 @@ func (h *EphemerisHandler) GetChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := ChartResponse{
-		Planets: planets,
-		Houses:  houses,
+		Bodies: planets,
+		Houses: houses,
 	}
 
 	h.logger.Info("Chart calculated successfully",
 		zap.String("request_id", requestID),
-		zap.Int("planet_count", len(planets)),
+		zap.Int("body_count", len(planets)),
 		zap.Int("house_count", len(houses)),
 		zap.Float64("lat", req.Lat),
 		zap.Float64("lng", req.Lng),
@@ -364,4 +361,326 @@ func (h *EphemerisHandler) respondWithError(w http.ResponseWriter, err error) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// GetBodies handles requests for celestial bodies with flexible configuration
+func (h *EphemerisHandler) GetBodies(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	logger := middleware.GetLoggerFromContext(r.Context())
+
+	// Parse time parameters
+	timeReq, err := h.parseTimeRequest(r)
+	if err != nil {
+		logger.Warn("Failed to parse time request",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewValidationError("query", err.Error()))
+		return
+	}
+
+	// Parse configuration from query parameters
+	config := h.parseBodiesConfig(r)
+
+	// Calculate bodies
+	result, err := h.service.CalculateBodies(r.Context(), timeReq, config)
+	if err != nil {
+		logger.Error("Failed to calculate bodies",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+			zap.Any("time", timeReq),
+		)
+		h.respondWithError(w, errors.NewEphemerisError("Failed to calculate celestial bodies"))
+		return
+	}
+
+	logger.Info("Bodies calculated successfully",
+		zap.String("request_id", requestID),
+		zap.Int("bodies", len(result.Bodies)),
+		zap.Bool("cached", result.Metadata.Cached),
+	)
+
+	h.respondWithJSON(w, http.StatusOK, result)
+}
+
+// GetTraditionalBodies handles requests for traditional celestial bodies (planets)
+func (h *EphemerisHandler) GetTraditionalBodies(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	logger := middleware.GetLoggerFromContext(r.Context())
+
+	timeReq, err := h.parseTimeRequest(r)
+	if err != nil {
+		logger.Warn("Failed to parse time request",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewValidationError("query", err.Error()))
+		return
+	}
+
+	bodies, err := h.service.GetTraditionalBodies(r.Context(), timeReq)
+	if err != nil {
+		logger.Error("Failed to get traditional bodies",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewEphemerisError("Failed to calculate traditional bodies"))
+		return
+	}
+
+	result := &eph.EphemerisResult{
+		Bodies:    bodies,
+		Metadata:  eph.CalculationMetadata{BodiesCalculated: len(bodies)},
+		Timestamp: time.Now(),
+	}
+
+	logger.Info("Traditional bodies calculated successfully",
+		zap.String("request_id", requestID),
+		zap.Int("bodies", len(bodies)),
+	)
+
+	h.respondWithJSON(w, http.StatusOK, result)
+}
+
+// GetExtendedBodies handles requests for extended celestial bodies
+func (h *EphemerisHandler) GetExtendedBodies(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	logger := middleware.GetLoggerFromContext(r.Context())
+
+	timeReq, err := h.parseTimeRequest(r)
+	if err != nil {
+		logger.Warn("Failed to parse time request",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewValidationError("query", err.Error()))
+		return
+	}
+
+	// Parse types parameter
+	typesParam := r.URL.Query().Get("types")
+	var types []eph.CelestialBodyType
+	if typesParam != "" {
+		typeStrings := strings.Split(typesParam, ",")
+		for _, ts := range typeStrings {
+			types = append(types, eph.CelestialBodyType(strings.TrimSpace(ts)))
+		}
+	} else {
+		// Default to all extended types
+		types = []eph.CelestialBodyType{eph.TypeNode, eph.TypeCentaur, eph.TypeAsteroid}
+	}
+
+	bodies, err := h.service.GetExtendedBodies(r.Context(), timeReq, types)
+	if err != nil {
+		logger.Error("Failed to get extended bodies",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewEphemerisError("Failed to calculate extended bodies"))
+		return
+	}
+
+	result := &eph.EphemerisResult{
+		Bodies:    bodies,
+		Metadata:  eph.CalculationMetadata{BodiesCalculated: len(bodies)},
+		Timestamp: time.Now(),
+	}
+
+	logger.Info("Extended bodies calculated successfully",
+		zap.String("request_id", requestID),
+		zap.Int("bodies", len(bodies)),
+		zap.Any("types", types),
+	)
+
+	h.respondWithJSON(w, http.StatusOK, result)
+}
+
+// GetFixedStars handles requests for fixed stars grouped by constellations
+func (h *EphemerisHandler) GetFixedStars(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	logger := middleware.GetLoggerFromContext(r.Context())
+
+	timeReq, err := h.parseTimeRequest(r)
+	if err != nil {
+		logger.Warn("Failed to parse time request",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewValidationError("query", err.Error()))
+		return
+	}
+
+	// Parse constellations parameter
+	constellationsParam := r.URL.Query().Get("constellations")
+	constellations := []string{} // Start with empty slice instead of nil
+	if constellationsParam != "" {
+		constellations = strings.Split(constellationsParam, ",")
+		for i, c := range constellations {
+			constellations[i] = strings.TrimSpace(c)
+		}
+
+		// Expand Zodiac constellation if requested
+		constellations = eph.ExpandZodiacConstellations(constellations)
+	}
+
+	constells, err := h.service.GetFixedStars(r.Context(), timeReq, constellations)
+	if err != nil {
+		logger.Error("Failed to get fixed stars",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewEphemerisError("Failed to calculate fixed stars"))
+		return
+	}
+
+	result := &eph.EphemerisResult{
+		Constellations: constells,
+		Metadata:       eph.CalculationMetadata{BodiesCalculated: len(constells)},
+		Timestamp:      time.Now(),
+	}
+
+	logger.Info("Fixed stars calculated successfully",
+		zap.String("request_id", requestID),
+		zap.Int("constellations", len(constells)),
+	)
+
+	h.respondWithJSON(w, http.StatusOK, result)
+}
+
+// GetFullChart handles requests for complete chart data (bodies + houses)
+func (h *EphemerisHandler) GetFullChart(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	logger := middleware.GetLoggerFromContext(r.Context())
+
+	timeReq, err := h.parseTimeRequest(r)
+	if err != nil {
+		logger.Warn("Failed to parse time request",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewValidationError("query", err.Error()))
+		return
+	}
+
+	// Parse location parameters
+	latStr := r.URL.Query().Get("lat")
+	lngStr := r.URL.Query().Get("lng")
+
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		h.respondWithError(w, errors.NewValidationError("lat", "Invalid latitude"))
+		return
+	}
+
+	lng, err := strconv.ParseFloat(lngStr, 64)
+	if err != nil {
+		h.respondWithError(w, errors.NewValidationError("lng", "Invalid longitude"))
+		return
+	}
+
+	result, err := h.service.GetFullChart(r.Context(), timeReq, lat, lng)
+	if err != nil {
+		logger.Error("Failed to get full chart",
+			zap.String("request_id", requestID),
+			zap.Error(err),
+		)
+		h.respondWithError(w, errors.NewEphemerisError("Failed to calculate full chart"))
+		return
+	}
+
+	logger.Info("Full chart calculated successfully",
+		zap.String("request_id", requestID),
+		zap.Int("bodies", len(result.Bodies)),
+		zap.Float64("lat", lat),
+		zap.Float64("lng", lng),
+	)
+
+	h.respondWithJSON(w, http.StatusOK, result)
+}
+
+// parseTimeRequest parses time parameters from the request
+func (h *EphemerisHandler) parseTimeRequest(r *http.Request) (eph.AstroTimeRequest, error) {
+	yearStr := r.URL.Query().Get("year")
+	monthStr := r.URL.Query().Get("month")
+	dayStr := r.URL.Query().Get("day")
+	utStr := r.URL.Query().Get("ut")
+
+	if yearStr == "" || monthStr == "" || dayStr == "" {
+		return eph.AstroTimeRequest{}, fmt.Errorf("year, month, and day are required")
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		return eph.AstroTimeRequest{}, fmt.Errorf("invalid year: %w", err)
+	}
+
+	month, err := strconv.Atoi(monthStr)
+	if err != nil {
+		return eph.AstroTimeRequest{}, fmt.Errorf("invalid month: %w", err)
+	}
+
+	day, err := strconv.Atoi(dayStr)
+	if err != nil {
+		return eph.AstroTimeRequest{}, fmt.Errorf("invalid day: %w", err)
+	}
+
+	ut := 12.0 // Default to noon
+	if utStr != "" {
+		ut, err = strconv.ParseFloat(utStr, 64)
+		if err != nil {
+			return eph.AstroTimeRequest{}, fmt.Errorf("invalid UT: %w", err)
+		}
+	}
+
+	return eph.AstroTimeRequest{
+		Year:      year,
+		Month:     month,
+		Day:       day,
+		UT:        ut,
+		Gregorian: true, // Default to Gregorian
+	}, nil
+}
+
+// parseBodiesConfig parses body configuration from query parameters
+func (h *EphemerisHandler) parseBodiesConfig(r *http.Request) eph.EphemerisConfig {
+	config := eph.EphemerisConfig{
+		UseSpeed:         true,
+		CalculationFlags: eph.SEFLG_SWIEPH | eph.SEFLG_SPEED,
+	}
+
+	// Parse boolean flags
+	if r.URL.Query().Get("traditional") == "true" {
+		config.IncludeTraditional = true
+	}
+	if r.URL.Query().Get("nodes") == "true" {
+		config.IncludeNodes = true
+	}
+	if r.URL.Query().Get("asteroids") == "true" {
+		config.IncludeAsteroids = true
+	}
+	if r.URL.Query().Get("centaurs") == "true" {
+		config.IncludeCentaurs = true
+	}
+
+	// Parse max magnitude for stars
+	if magStr := r.URL.Query().Get("max_magnitude"); magStr != "" {
+		if mag, err := strconv.ParseFloat(magStr, 64); err == nil {
+			config.MaxStarMagnitude = mag
+		}
+	}
+
+	// Parse constellations
+	if constStr := r.URL.Query().Get("constellations"); constStr != "" {
+		config.Constellations = strings.Split(constStr, ",")
+		for i, c := range config.Constellations {
+			config.Constellations[i] = strings.TrimSpace(c)
+		}
+	}
+
+	// If no specific config set, default to traditional bodies
+	if !config.IncludeTraditional && !config.IncludeNodes && !config.IncludeAsteroids && !config.IncludeCentaurs {
+		config.IncludeTraditional = true
+	}
+
+	return config
 }

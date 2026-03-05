@@ -97,11 +97,7 @@ func main() {
 	}()
 
 	// Initialize cached ephemeris service
-	var ephemerisService interface {
-		GetPlanetsCached(ctx context.Context, yr, mon, day int, ut float64) ([]eph.Planet, error)
-		GetHousesCached(ctx context.Context, yr, mon, day int, ut, lat, lng float64) ([]eph.House, error)
-		GetChartCached(ctx context.Context, yr, mon, day int, ut, lat, lng float64) ([]eph.Planet, []eph.House, error)
-	}
+	var ephemerisService eph.EphemerisService
 
 	if redisCache != nil {
 		ephemerisService = eph.NewCachedEphemerisService(redisCache, appLogger.Logger)
@@ -220,10 +216,17 @@ func setupRouter(apiKeyService auth.APIKeyServiceInterface, ephemerisHandler *ha
 	authMiddleware := middleware.NewAuthMiddleware(apiKeyService, logger, "")
 	ephemerisAuth := authMiddleware.RequireScope("read:ephemeris")
 
-	// Ephemeris endpoints
+	// Legacy ephemeris endpoints (deprecated)
 	v1.Handle("/planets", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetPlanets))).Methods("GET")
 	v1.Handle("/houses", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetHouses))).Methods("GET")
 	v1.Handle("/chart", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetChart))).Methods("GET")
+
+	// New ephemeris endpoints
+	v1.Handle("/bodies", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetBodies))).Methods("GET")
+	v1.Handle("/traditional", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetTraditionalBodies))).Methods("GET")
+	v1.Handle("/extended", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetExtendedBodies))).Methods("GET")
+	v1.Handle("/fixed-stars", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetFixedStars))).Methods("GET")
+	v1.Handle("/full-chart", ephemerisAuth.Authenticate(http.HandlerFunc(ephemerisHandler.GetFullChart))).Methods("GET")
 
 	// Add CORS middleware if needed
 	router.Use(mux.CORSMethodMiddleware(router))

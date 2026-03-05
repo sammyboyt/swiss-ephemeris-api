@@ -11,9 +11,17 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
 # Test Commands
-test-unit: ## Run unit tests only
-	@echo "Running unit tests..."
+test-unit: ## Run unit tests only (pkg only)
+	@echo "Running unit tests (pkg only)..."
 	go test ./pkg/... -v -short
+
+test-unit-all: build-sweph ## Run all unit tests including eph (requires Swiss Ephemeris)
+	@echo "Running all unit tests (including eph with CGO)..."
+	go test ./pkg/... ./eph/... -v -short -timeout=30s
+
+test-eph: build-sweph ## Run ephemeris tests only (requires Swiss Ephemeris)
+	@echo "Running ephemeris tests with CGO..."
+	go test ./eph/... -v -timeout=30s
 
 test-integration: ## Run integration tests (requires MongoDB)
 	@echo "Running integration tests..."
@@ -23,24 +31,24 @@ test-e2e: ## Run end-to-end tests (requires MongoDB)
 	@echo "Running end-to-end tests..."
 	RUN_E2E=true go test -tags=e2e ./pkg/e2e/... -v -timeout=5m
 
-test-all: ## Run all tests (unit, integration, e2e)
+test-all: build-sweph ## Run all tests (unit, integration, e2e, eph)
 	@echo "Running all tests..."
-	@echo "1. Unit tests..."
-	go test ./pkg/... -v -short
+	@echo "1. Unit tests (pkg + eph)..."
+	go test ./pkg/... ./eph/... -v -short -timeout=30s
 	@echo "2. Integration tests..."
 	go test -tags=integration ./pkg/... -v
 	@echo "3. End-to-end tests..."
 	RUN_E2E=true go test -tags=e2e ./pkg/e2e/... -v -timeout=5m
 
 # Coverage Commands
-coverage: ## Generate coverage report
+coverage: build-sweph ## Generate coverage report (includes eph)
 	@echo "Generating coverage report..."
-	go test -coverprofile=coverage.out ./pkg/...
+	go test -coverprofile=coverage.out ./pkg/... ./eph/... -short -timeout=30s
 	go tool cover -func=coverage.out
 
-coverage-html: ## Generate HTML coverage report
+coverage-html: build-sweph ## Generate HTML coverage report (includes eph)
 	@echo "Generating HTML coverage report..."
-	go test -coverprofile=coverage.out ./pkg/...
+	go test -coverprofile=coverage.out ./pkg/... ./eph/... -short -timeout=30s
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
@@ -48,6 +56,11 @@ coverage-integration: ## Generate coverage for integration tests
 	@echo "Generating integration test coverage..."
 	go test -tags=integration -coverprofile=coverage-integration.out ./pkg/...
 	go tool cover -func=coverage-integration.out
+
+coverage-eph: build-sweph ## Generate coverage for ephemeris tests only
+	@echo "Generating ephemeris test coverage..."
+	go test -coverprofile=coverage-eph.out ./eph/... -timeout=30s
+	go tool cover -func=coverage-eph.out
 
 # Quality Checks
 lint: ## Run linter
@@ -112,7 +125,7 @@ setup-dev: ## Setup development environment with Swiss Ephemeris
 	./scripts/build-sweph.sh
 	@echo "4. Setting up pre-commit hooks..."
 	mkdir -p .git/hooks
-	@echo '#!/bin/bash\n\necho "🔍 Running pre-commit checks..."\n\n# Run quality checks\necho "  📏 Running quality checks..."\nif ! make quality > /dev/null 2>&1; then\n    echo "❌ Quality checks failed. Run '\''make quality'\'' to fix."\n    exit 1\nfi\n\n# Check for build artifacts\necho "  🧹 Checking for build artifacts..."\nif [ -f "astral-backend" ] || [ -f "bin/astral-backend" ] || [ -f "dist/bin/astral-backend" ] || [ -f "eph/sweph/src/libswe.a" ] || ls eph/sweph/src/*.o 1> /dev/null 2>&1; then\n    echo "❌ Build artifacts found! Run '\''make clean'\'' before committing."\n    exit 1\nfi\n\n# Run unit tests\necho "  🧪 Running unit tests..."\nif ! go test ./pkg/... -short > /dev/null 2>&1; then\n    echo "❌ Unit tests failed. Fix tests before committing."\n    exit 1\nfi\n\necho "✅ All pre-commit checks passed!"' > .git/hooks/pre-commit
+	@echo '#!/bin/bash\n\necho "🔍 Running pre-commit checks..."\n\n# Run quality checks\necho "  📏 Running quality checks..."\nif ! make quality > /dev/null 2>&1; then\n    echo "❌ Quality checks failed. Run '\''make quality'\'' to fix."\n    exit 1\nfi\n\n# Check for build artifacts\necho "  🧹 Checking for build artifacts..."\nif [ -f "astral-backend" ] || [ -f "bin/astral-backend" ] || [ -f "dist/bin/astral-backend" ] || [ -f "eph/sweph/src/libswe.a" ] || ls eph/sweph/src/*.o 1> /dev/null 2>&1; then\n    echo "❌ Build artifacts found! Run '\''make clean'\'' before committing."\n    exit 1\nfi\n\n# Run unit tests\necho "  🧪 Running unit tests..."\nif [ -f "eph/sweph/src/libswe.a" ]; then\n    if ! go test ./pkg/... ./eph/... -short -timeout=30s > /dev/null 2>&1; then\n        echo "❌ Unit tests failed. Fix tests before committing."\n        exit 1\n    fi\nelse\n    if ! go test ./pkg/... -short > /dev/null 2>&1; then\n        echo "❌ Unit tests failed. Fix tests before committing."\n        exit 1\n    fi\n    echo "  ⚠️  Warning: Swiss Ephemeris library not built. Run '\''make build-sweph'\'' for full test coverage."\nfi\n\necho "✅ All pre-commit checks passed!"' > .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
 	@echo "Development environment setup complete!"
 

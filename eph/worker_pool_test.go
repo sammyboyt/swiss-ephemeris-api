@@ -32,9 +32,9 @@ func TestWorkerPool_SubmitJob(t *testing.T) {
 		assert.NoError(t, result.Error)
 		assert.NotNil(t, result.Data)
 
-		planets, ok := result.Data.([]Planet)
+		bodies, ok := result.Data.([]CelestialBody)
 		assert.True(t, ok)
-		assert.True(t, len(planets) > 0) // Should have planets
+		assert.True(t, len(bodies) > 0) // Should have bodies
 
 	case <-time.After(1 * time.Second):
 		t.Fatal("Job did not complete within timeout")
@@ -118,4 +118,45 @@ func TestWorkerPool_JobTimeout(t *testing.T) {
 		// Expected - context was cancelled
 		assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 	}
+}
+
+func TestWorkerPool_GetStats(t *testing.T) {
+	logger := createTestLogger(t)
+	pool := NewWorkerPool(2, logger)
+	pool.Start()
+	defer pool.Stop()
+
+	// Test initial stats
+	stats := pool.GetStats()
+	assert.NotNil(t, stats)
+	assert.Equal(t, 2, stats["workers"])
+	assert.Equal(t, int64(0), stats["jobs_processed"])
+	assert.Equal(t, int64(0), stats["active_jobs"])
+
+	// Submit a job to change stats
+	job := CalculationRequest{
+		ID:   "test-job",
+		Type: "planets",
+		Params: map[string]interface{}{
+			"year": 2024, "month": 1, "day": 15, "ut": 12.0,
+		},
+		Response: make(chan CalculationResult, 1),
+		Context:  context.Background(),
+	}
+
+	pool.Submit(job)
+
+	// Wait for job completion
+	select {
+	case result := <-job.Response:
+		assert.NoError(t, result.Error)
+		assert.NotNil(t, result.Data)
+	case <-time.After(1 * time.Second):
+		t.Fatal("Job did not complete in time")
+	}
+
+	// Check updated stats
+	stats = pool.GetStats()
+	assert.Equal(t, int64(1), stats["jobs_processed"])
+	assert.Equal(t, int64(0), stats["active_jobs"]) // Job completed
 }

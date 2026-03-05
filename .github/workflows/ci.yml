@@ -30,16 +30,24 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Build Swiss Ephemeris CGO library
+        run: make build-sweph
+
       - name: Run quality checks
         run: make quality
 
-      - name: Run unit tests
-        run: make test-unit
+      - name: Run all unit tests (including CGO)
+        run: make test-unit-all
 
       - name: Run integration tests
         run: make test-integration
 
-      - name: Generate coverage
+      - name: Generate coverage (including CGO tests)
         run: make coverage
 
       - name: Check for build artifacts

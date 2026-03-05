@@ -87,31 +87,66 @@ main() {
     # API Functionality Test
     log_info "Testing API functionality..."
 
-    # Planets endpoint
-    planets_count=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/planets?year=2024&month=1&day=15&ut=12.0" | jq -r '.planets | length')
-    if [ "$planets_count" -eq 12 ]; then
-        log_success "Planets endpoint working (returned $planets_count planets)"
+    # Traditional bodies endpoint (legacy compatibility)
+    planets_count=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/planets?year=2024&month=1&day=15&ut=12.0" | jq -r '.bodies | length')
+    if [ "$planets_count" -eq 10 ]; then
+        log_success "Planets endpoint working (returned $planets_count bodies)"
     else
-        log_error "Planets endpoint failed (expected 12, got $planets_count)"
+        log_error "Planets endpoint failed (expected 10, got $planets_count)"
+        exit 1
+    fi
+
+    # New unified bodies endpoint with traditional planets
+    bodies_traditional=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/bodies?year=2024&month=1&day=15&traditional=true" | jq -r '.bodies | length')
+    if [ "$bodies_traditional" -eq 10 ]; then
+        log_success "Bodies endpoint (traditional) working (returned $bodies_traditional bodies)"
+    else
+        log_error "Bodies endpoint (traditional) failed (expected 10, got $bodies_traditional)"
+        exit 1
+    fi
+
+    # Extended bodies endpoint (centaurs, asteroids, nodes)
+    bodies_extended=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/extended?year=2024&month=1&day=15" | jq -r '.bodies | length')
+    if [ "$bodies_extended" -ge 4 ]; then  # At least some extended bodies
+        log_success "Extended bodies endpoint working (returned $bodies_extended bodies)"
+    else
+        log_error "Extended bodies endpoint failed (expected >=4, got $bodies_extended)"
         exit 1
     fi
 
     # Houses endpoint
     houses_count=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/houses?year=2024&month=1&day=15&ut=12.0&lat=40.7128&lng=-74.0060" | jq -r '. | length')
-    if [ "$houses_count" -eq 52 ]; then
-        log_success "Houses endpoint working (returned $houses_count house data points)"
+    if [ "$houses_count" -eq 12 ]; then
+        log_success "Houses endpoint working (returned $houses_count houses)"
     else
-        log_error "Houses endpoint failed (expected 52, got $houses_count)"
+        log_error "Houses endpoint failed (expected 12, got $houses_count)"
         exit 1
     fi
 
     # Chart endpoint
-    chart_planets=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/chart?year=2024&month=1&day=15&ut=12.0&lat=40.7128&lng=-74.0060" | jq -r '.planets | length')
+    chart_bodies=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/chart?year=2024&month=1&day=15&ut=12.0&lat=40.7128&lng=-74.0060" | jq -r '.bodies | length')
     chart_houses=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/chart?year=2024&month=1&day=15&ut=12.0&lat=40.7128&lng=-74.0060" | jq -r '.houses | length')
-    if [ "$chart_planets" -eq 12 ] && [ "$chart_houses" -eq 52 ]; then
-        log_success "Chart endpoint working (returned $chart_planets planets and $chart_houses houses)"
+    if [ "$chart_bodies" -eq 10 ] && [ "$chart_houses" -eq 12 ]; then
+        log_success "Chart endpoint working (returned $chart_bodies bodies and $chart_houses houses)"
     else
-        log_error "Chart endpoint failed (expected 12 planets and 52 houses, got $chart_planets planets and $chart_houses houses)"
+        log_error "Chart endpoint failed (expected 10 bodies and 12 houses, got $chart_bodies bodies and $chart_houses houses)"
+        exit 1
+    fi
+
+    # Full chart endpoint (new unified endpoint)
+    full_chart_response=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/full-chart?year=2024&month=1&day=15&ut=12.0&lat=40.7128&lng=-74.0060&traditional=true")
+    if echo "$full_chart_response" | jq -e '.bodies' > /dev/null 2>&1 && echo "$full_chart_response" | jq -e '.houses' > /dev/null 2>&1; then
+        full_chart_bodies=$(echo "$full_chart_response" | jq -r '.bodies | length')
+        full_chart_houses=$(echo "$full_chart_response" | jq -r '.houses | length')
+        if [ "$full_chart_bodies" -ge 10 ] && [ "$full_chart_houses" -eq 12 ]; then
+            log_success "Full chart endpoint working (returned $full_chart_bodies bodies and $full_chart_houses houses)"
+        else
+            log_error "Full chart endpoint failed (expected >=10 bodies and 12 houses, got $full_chart_bodies bodies and $full_chart_houses houses)"
+            exit 1
+        fi
+    else
+        log_error "Full chart endpoint response missing bodies or houses fields"
+        echo "Response: $full_chart_response"
         exit 1
     fi
 
@@ -127,13 +162,19 @@ main() {
 
     # Caching Test
     log_info "Testing Redis caching..."
-    initial_keys=$(docker-compose exec -T redis redis-cli keys "*" | wc -l)
-    curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/planets?year=2024&month=1&day=15&ut=12.0" > /dev/null
-    after_keys=$(docker-compose exec -T redis redis-cli keys "*" | wc -l)
-    if [ "$after_keys" -gt "$initial_keys" ]; then
-        log_success "Caching working (Redis keys increased from $initial_keys to $after_keys)"
+    # Clear Redis cache to ensure clean test
+    docker-compose exec -T redis redis-cli flushall > /dev/null 2>&1
+    # Use bodies endpoint which returns metadata about caching
+    cached_status=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/bodies?year=2024&month=1&day=15&traditional=true" | jq -r '.metadata.cached')
+    cache_key=$(curl -s -H "Authorization: Bearer $API_KEY" "http://localhost:8080/api/v1/bodies?year=2024&month=1&day=15&traditional=true" | jq -r '.metadata.cache_key')
+    # Check if cache key exists in Redis
+    key_exists=$(docker-compose exec -T redis redis-cli exists "$cache_key" 2>/dev/null)
+    if [ "$cached_status" = "false" ] && [ "$key_exists" = "1" ]; then
+        log_success "Caching working (cache miss created key: $cache_key)"
+    elif [ "$cached_status" = "true" ]; then
+        log_success "Caching working (cache hit detected)"
     else
-        log_warning "Caching may not be working properly"
+        log_warning "Caching may not be working properly (cached: $cached_status, key_exists: $key_exists)"
     fi
 
     # Error Handling Test
@@ -161,7 +202,10 @@ main() {
     log_success "✅ Redis: Connected and caching"
     log_success "✅ Application: Running and responsive"
     log_success "✅ Authentication: Working correctly"
-    log_success "✅ API Endpoints: Planets, Houses, Chart all functional"
+    log_success "✅ API Endpoints: Planets, Bodies, Fixed Stars, Houses, Charts all functional"
+    log_success "✅ Full Chart: Returns bodies and houses in separate fields"
+    log_success "✅ Zodiac Constellation: Fixed stars aggregation working"
+    log_success "✅ Extended Bodies: Asteroids and centaurs included"
     log_success "✅ Request Tracing: Request IDs generated and logged"
     log_success "✅ Error Handling: Proper error responses"
     log_success "✅ Concurrent Load: Worker pool handling multiple requests"

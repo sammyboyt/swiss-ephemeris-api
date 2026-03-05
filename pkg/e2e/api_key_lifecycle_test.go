@@ -115,12 +115,12 @@ func TestAPIKeyLifecycle_E2E(t *testing.T) {
 					url:            "/planets?year=2023&month=12&day=25&ut=12.0",
 					expectedStatus: http.StatusOK,
 					checkResponse: func(t *testing.T, body []byte) {
-						var response handlers.PlanetResponse
+						var response handlers.CelestialBodyResponse
 						err := json.Unmarshal(body, &response)
 						require.NoError(t, err)
-						assert.NotEmpty(t, response.Planets)
-						assert.Len(t, response.Planets, 12) // Should have all planets
-						for _, planet := range response.Planets {
+						assert.NotEmpty(t, response.Bodies)
+						assert.Len(t, response.Bodies, 10) // Should have traditional planets
+						for _, planet := range response.Bodies {
 							assert.NotEmpty(t, planet.Name)
 							assert.True(t, planet.Longitude >= 0 && planet.Longitude <= 360)
 						}
@@ -147,9 +147,10 @@ func TestAPIKeyLifecycle_E2E(t *testing.T) {
 						var response handlers.ChartResponse
 						err := json.Unmarshal(body, &response)
 						require.NoError(t, err)
-						assert.NotEmpty(t, response.Planets)
+						assert.NotEmpty(t, response.Bodies)
 						assert.NotEmpty(t, response.Houses)
-						assert.Len(t, response.Planets, 12)
+						assert.Len(t, response.Bodies, 10) // Traditional planets
+						assert.Len(t, response.Houses, 12) // All houses
 					},
 				},
 				{

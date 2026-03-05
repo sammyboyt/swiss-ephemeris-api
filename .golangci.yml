@@ -4,7 +4,7 @@ run:
   tests: true
 
 output:
-  format: colored-line-number
+  formats: colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
@@ -36,9 +36,6 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - varcheck
-    - structcheck
-    - deadcode
     - gosimple
     - misspell
     - unconvert

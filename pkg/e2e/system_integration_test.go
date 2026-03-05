@@ -550,3 +550,115 @@ func TestSystemSecurity(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp4.StatusCode)
 	})
 }
+
+// TestZodiacIntegration tests Zodiac constellation functionality end-to-end
+func TestZodiacIntegration(t *testing.T) {
+	// Skip if not running e2e tests
+	if os.Getenv("RUN_E2E") != "true" {
+		t.Skip("Skipping e2e test - set RUN_E2E=true to run")
+	}
+
+	server, cleanup := setupE2ETestServer(t)
+	defer cleanup()
+
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Create API key for testing
+	apiKey := createTestAPIKey(t, server.URL, client, []string{"read:ephemeris"})
+
+	t.Run("zodiac_constellation_api", func(t *testing.T) {
+		// Test Zodiac parameter expansion
+		req, _ := http.NewRequest("GET",
+			server.URL+"/api/v1/fixed-stars?year=2024&month=1&day=1&ut=12.0&constellations=Zodiac", nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey.Key)
+		req.Header.Set("X-API-Key", apiKey.Key)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		// Should have constellations array
+		constellations, ok := result["constellations"].([]interface{})
+		assert.True(t, ok, "Response should contain constellations array")
+
+		// Should have at least some constellations (may be empty if CGO not available)
+		// In a real environment with CGO, this would have stars
+		t.Logf("Zodiac API returned %d constellations", len(constellations))
+	})
+
+	t.Run("zodiac_with_specific_constellations", func(t *testing.T) {
+		// Test Zodiac + additional constellations
+		req, _ := http.NewRequest("GET",
+			server.URL+"/api/v1/fixed-stars?year=2024&month=1&day=1&ut=12.0&constellations=Zodiac,UMa", nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey.Key)
+		req.Header.Set("X-API-Key", apiKey.Key)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		// Should have response structure
+		_, hasConstellations := result["constellations"]
+		assert.True(t, hasConstellations, "Response should contain constellations field")
+	})
+
+	t.Run("individual_zodiac_constellations", func(t *testing.T) {
+		// Test requesting individual zodiac constellations
+		req, _ := http.NewRequest("GET",
+			server.URL+"/api/v1/fixed-stars?year=2024&month=1&day=1&ut=12.0&constellations=Leo,Vir,Sco", nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey.Key)
+		req.Header.Set("X-API-Key", apiKey.Key)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		// Should have response structure
+		constellations, ok := result["constellations"].([]interface{})
+		assert.True(t, ok, "Response should contain constellations array")
+
+		t.Logf("Individual zodiac constellations API returned %d constellations", len(constellations))
+	})
+
+	t.Run("zodiac_magnitude_filtering", func(t *testing.T) {
+		// Test Zodiac with magnitude filtering
+		req, _ := http.NewRequest("GET",
+			server.URL+"/api/v1/fixed-stars?year=2024&month=1&day=1&ut=12.0&constellations=Zodiac&max_magnitude=3.0", nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey.Key)
+		req.Header.Set("X-API-Key", apiKey.Key)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var result map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		// Should have response structure
+		_, hasConstellations := result["constellations"]
+		assert.True(t, hasConstellations, "Response should contain constellations field")
+
+		t.Logf("Zodiac with magnitude filtering completed successfully")
+	})
+}
